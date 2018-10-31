@@ -5630,16 +5630,16 @@
 	  var resArray = oldArray.slice();
 	  // if this becomes too heavy, consider making a list of strings along with the activeList
 	  // to make a quick array.containers("slug/urn"); check instead of a foreach.
-	  newArray.forEach(function (programcard) {
-	    var slug = programcard.Slug;
+	  newArray.forEach(function (videoArticle) {
+	    var slug = videoArticle.programcard.Slug;
 	    var alreadyExists = false;
-	    resArray.forEach(function (oldProgramcard) {
-	      if (oldProgramcard.Slug === slug) {
+	    resArray.forEach(function (oldArticle) {
+	      if (oldArticle.programcard.Slug === slug) {
 	        alreadyExists = true;
 	      }
 	    });
 	    if (!alreadyExists) {
-	      resArray.push(programcard);
+	      resArray.push(videoArticle);
 	    }
 	  });
 	  return resArray;
@@ -7240,6 +7240,9 @@
 	    _this.setIsAutoplayingSlug = _this.setIsAutoplayingSlug.bind(_this);
 	    _this.setActiveClipList = _this.setActiveClipList.bind(_this);
 	    _this.setClipListMetadata = _this.setClipListMetadata.bind(_this);
+	    _this.setOverrideTitleText = _this.setOverrideTitleText.bind(_this);
+	    _this.setOverridePosterImageUri = _this.setOverridePosterImageUri.bind(_this);
+	    _this.setArticleBingingTags = _this.setArticleBingingTags.bind(_this);
 	    _this.state = {
 	      active: true,
 	      autoplay: props.autoplay || false,
@@ -7256,6 +7259,7 @@
 	      setActiveClipList: _this.setActiveClipList,
 	      articleAutoplay: props.articleBingingTags instanceof Array || null,
 	      articleBingingTags: props.articleBingingTags instanceof Array ? props.articleBingingTags : null,
+	      setArticleBingingTags: _this.setArticleBingingTags,
 	      target: props.target || 'Default',
 	      isAutoplayingSlug: null,
 	      isLoading: true,
@@ -7271,8 +7275,11 @@
 	      useDrtvSender: props.useDrtvSender || false,
 	      useChromecast: props.useChromecast || false,
 	      useLiveRewind: props.useLiveRewind || false,
+	      overridePosterImageUri: typeof props.overridePosterImageUri === "string" ? props.overridePosterImageUri : null,
 	      overridePosterText: typeof props.overridePosterText === "string" ? props.overridePosterText : null,
 	      overrideTitleText: typeof props.overrideTitleText === "string" ? props.overrideTitleText : null,
+	      setOverrideTitleText: _this.setOverrideTitleText,
+	      setOverridePosterImageUri: _this.setOverridePosterImageUri,
 	      overridePosterTextColor: props.overridePosterTextColor ? props.overridePosterTextColor : "#FFD400",
 	      overrideBigPlayButtonColor: props.overrideBigPlayButtonColor ? props.overrideBigPlayButtonColor : "#FFD400",
 	      // player events
@@ -7347,6 +7354,12 @@
 	    }
 	    // used by the playerContainer and clip-list component.
 	    // updates the activeClipList used in the cliplist component.
+	    // cliplist object contains 
+	    // { 
+	    //    programcard, // required, the clip programcard
+	    //    mimerOverrideMufields,    // optional: articleTag, articleTitle, imageUri
+	    //    programcardUrn // optional: only used for data fetched from mimer 
+	    // }
 
 	  }, {
 	    key: 'setActiveClipList',
@@ -7356,6 +7369,29 @@
 	          activeClipList: clipListObject
 	        });
 	      }
+	    }
+	  }, {
+	    key: 'setArticleBingingTags',
+	    value: function setArticleBingingTags(articleBingingTags) {
+	      if (articleBingingTags instanceof Array) {
+	        this.setState({
+	          articleBingingTags: articleBingingTags
+	        });
+	      }
+	    }
+	  }, {
+	    key: 'setOverrideTitleText',
+	    value: function setOverrideTitleText(overrideTitleText) {
+	      this.setState({
+	        overrideTitleText: overrideTitleText
+	      });
+	    }
+	  }, {
+	    key: 'setOverridePosterImageUri',
+	    value: function setOverridePosterImageUri(overridePosterImageUri) {
+	      this.setState({
+	        overridePosterImageUri: overridePosterImageUri
+	      });
 	    }
 	  }, {
 	    key: 'turnOff',
@@ -7702,8 +7738,13 @@
 	      if (!list && !list.Items && !list.Items.length >= 1) {
 	        return reject("No data in clip list");
 	      }
-	      activeList = list.Items.filter(function (pc) {
-	        return pc.Type === "ProgramCard" && pc.HasPublicPrimaryAsset;
+
+	      list.Items.forEach(function (programcard) {
+	        activeList.push({ programcard: programcard });
+	      });
+
+	      activeList = activeList.filter(function (pc) {
+	        return pc.programcard.Type === "ProgramCard" && pc.programcard.HasPublicPrimaryAsset;
 	      });
 	      return resolve({ Items: activeList, Title: list.Title, TotalSize: list.TotalSize });
 	    });
@@ -7717,8 +7758,12 @@
 	      if (!list && !list.Items && !list.Items.length >= 1) {
 	        return reject("No data in clip list");
 	      }
-	      activeList = list.Items.filter(function (pc) {
-	        return pc.Type === "ProgramCard" && pc.HasPublicPrimaryAsset;
+	      list.Items.forEach(function (programcard) {
+	        activeList.push({ programcard: programcard });
+	      });
+
+	      activeList = activeList.filter(function (pc) {
+	        return pc.programcard.Type === "ProgramCard" && pc.programcard.HasPublicPrimaryAsset;
 	      });
 	      return resolve({ Items: activeList });
 	    });
@@ -7744,13 +7789,17 @@
 	    });
 	    // return an array of programcards, that can be prepended with the activelist array.
 	    Promise.all(promises).then(function (programcards) {
+	      var videoResults = [];
 	      if (!programcards.length > 0) {
 	        return reject("Couldn't find any programcards from the given slug: ", slug);
 	      }
+	      programcards.forEach(function (programcard) {
+	        videoResults.push({ programcard: programcard });
+	      });
 	      // return the list of programcards
 	      // filter programcards that doesn't have primary asset.
-	      var videoResults = programcards.filter(function (pc) {
-	        return pc.HasPublicPrimaryAsset;
+	      videoResults = videoResults.filter(function (pc) {
+	        return pc.programcard.HasPublicPrimaryAsset;
 	      });
 	      if (videoResults.length > 0) {
 	        return resolve(videoResults);
@@ -7765,51 +7814,56 @@
 	function getArticleVideoListPage(tags, page) {
 	  return new Promise(function (resolve, reject) {
 	    mu.getLatestVideoArticles(tags, page).then(function (list) {
-	      var videoArticleUrns = [];
+	      var articles = [];
+
+	      if (list.data.length === 0) {
+	        return reject("AtEndOfResults");
+	      }
 	      // fetch a list of programcard urn's from the article pages
 	      list.data.forEach(function (article) {
+	        var programcardUrn = null;
+	        var mimerOverrideMuFields = null;
+	        var articleTag = article.site;
+	        var articleTitle = article.title;
 	        // Programcard urns can hide under images with mime_type video.
 	        if (article.images && article.images instanceof Array) {
 	          article.images.forEach(function (image) {
-	            var isMimeTypeVideo = image.mime_type === "video";
-	            if (isMimeTypeVideo) {
+	            if (image.mime_type === "video") {
 	              var indexOfUrn = image.url.toLowerCase().indexOf("programcard/get/");
 	              if (indexOfUrn > -1) {
-	                var programcardUrn = image.url;
-	                videoArticleUrns.push(decodeURIComponent(programcardUrn.substring(indexOfUrn + 16, programcardUrn.length)));
+	                programcardUrn = image.url;
+	                programcardUrn = decodeURIComponent(programcardUrn.substring(indexOfUrn + 16, programcardUrn.length));
 	              }
 	            }
+	            if (image.mime_type === "image") {
+	              mimerOverrideMuFields = {
+	                articleTitle: articleTitle,
+	                imageUri: image.url,
+	                articleTag: articleTag
+	              };
+	            }
 	          });
+	          if (programcardUrn) {
+	            articles.push({ programcardUrn: programcardUrn, mimerOverrideMuFields: mimerOverrideMuFields });
+	          }
 	        }
-	        // Programcards can hide inside paragraphs as oembeds.
-	        article.body.forEach(function (attachment) {
-	          var isNestedVideoElement = attachment.type === "paragraph" && attachment.nodes && attachment.nodes.length > 0 && attachment.nodes[0].type === "widget_oembed" && attachment.nodes[0].nodes[0].mime_type === "video/oembed";
-	          var isOembedVideo = attachment.type === "widget_oembed" && attachment.nodes[0].mime_type === "video/oembed";
-	          var indexOfUrn = null;
-	          var uri = "";
-	          if (isNestedVideoElement) {
-	            uri = attachment.nodes[0].nodes[0].uri;
-	          } else if (isOembedVideo) {
-	            uri = attachment.nodes[0].uri;
-	          }
-	          indexOfUrn = uri.toLowerCase().indexOf("programcard/get/");
-	          if (indexOfUrn > -1) {
-	            videoArticleUrns.push(decodeURIComponent(uri.substring(indexOfUrn + 16, uri.length)));
-	          }
-	        });
 	      });
 	      // fetch a small programcard for each urn result
-	      if (videoArticleUrns.length > 0) {
+	      if (articles.length > 0) {
 	        // async get all programcards
 	        var allProgramCards = [];
-	        videoArticleUrns.forEach(function (urn) {
-	          allProgramCards.push(mu.getProgramcard(urn, false));
+	        articles.forEach(function (article) {
+	          allProgramCards.push(mu.getProgramcard(article.programcardUrn, false));
 	        });
+	        // allProgramcards has the same order as articles
 	        Promise.all(allProgramCards).then(function (programcards) {
+	          articles.forEach(function (videoArticle, index) {
+	            videoArticle.programcard = programcards[index];
+	          });
 	          // return the list of programcards
 	          // filter programcards that doesn't have primary asset.
-	          var videoResults = programcards.filter(function (pc) {
-	            return pc.HasPublicPrimaryAsset;
+	          var videoResults = articles.filter(function (videoArticle) {
+	            return videoArticle.programcard.HasPublicPrimaryAsset;
 	          });
 	          return resolve(videoResults);
 	        });
@@ -24608,10 +24662,12 @@
 	      offset: 10,
 	      // which page in mimer results we're on.
 	      mimerPage: props.mimerPage || 1,
+	      // number of searches made.
+	      mimerSearches: props.mimerPage || 1,
 	      // made a hard limit to avoid mimer fetching unlimited pages, 
 	      // eventually new articles might run out of non-duplicate programcards, 
 	      // forming an infinite number of requests as paging will continue upto the hardlimit.. 
-	      mimerPageHardLimit: 15,
+	      mimerPageHardLimit: 7,
 	      totalSize: props.clipListTotalSize || null,
 	      isPaging: false,
 	      playerLoaded: false
@@ -24627,9 +24683,46 @@
 	    key: 'handleClick',
 	    value: function handleClick(evt) {
 	      evt.preventDefault();
-	      var programSlug = this.props.item.Slug;
+	      var programSlug = this.props.item.programcard.Slug;
+	      var mimerOverrides = this.props.item.mimerOverrideMuFields;
 	      // start program
+	      var programTitleOverride = mimerOverrides && mimerOverrides.articleTitle ? mimerOverrides.articleTitle : null;
+	      var imageUriOverride = mimerOverrides && mimerOverrides.imageUri ? mimerOverrides.imageUri : null;
+	      if (programTitleOverride) {
+	        this.props.setOverrideTitleText(programTitleOverride);
+	      } else {
+	        // reset any overrides if there isn't any for this specific program.
+	        // relevant when going from an articleAutoplay result back to the selected program (given via slug)
+	        this.props.setOverrideTitleText(null);
+	      }
+	      if (imageUriOverride) {
+	        // round up image size to nearest 50px
+	        var imageWidth = Math.ceil(this.props.containerWidth / 50) * 50;
+	        this.props.setOverridePosterImageUri(this.props.scaleImg(imageUriOverride, imageWidth));
+	      }
 	      this.props.setSlug(programSlug);
+	    }
+	  }, {
+	    key: 'scaleImg',
+	    value: function scaleImg(imageUri, width) {
+	      // since new URL() isn't ie11 compatible, we make our own polyfill, 
+	      // and use the dom to generate the url object for us.
+	      var getUrlObject = function getUrlObject(url) {
+	        var urlObject = document.createElement("a");
+	        urlObject.href = url;
+	        return urlObject;
+	      };
+
+	      var imageUrl = getUrlObject(imageUri);
+	      if (imageUrl.hostname && imageUrl.pathname) {
+	        var imgScalerUrl = "//asset.dr.dk/imagescaler/?";
+	        var server = "server=" + imageUrl.hostname;
+	        var filePath = "&file=" + imageUrl.pathname;
+	        var scaleOptions = "&w=" + width + "&scaleAfter=w";
+	        return imgScalerUrl + server + filePath + scaleOptions;
+	      } else {
+	        return "";
+	      }
 	    }
 	  }, {
 	    key: 'componentDidUpdate',
@@ -24645,16 +24738,25 @@
 	          var _findProgramIndex = _this2.findProgramIndex(_this2.props.slug),
 	              newProgram = _findProgramIndex.newProgram,
 	              newProgramIndex = _findProgramIndex.newProgramIndex;
+
+	          var mimerOverrides = newProgram[0] ? newProgram[0].mimerOverrideMuFields : null;
+	          var programTitleOverride = mimerOverrides && mimerOverrides.articleTitle ? mimerOverrides.articleTitle : null;
+	          var imageUriOverride = mimerOverrides && mimerOverrides.imageUri ? mimerOverrides.imageUri : null;
+
 	          // play the next program if we found it
-
-
 	          if (newProgram.length === 1) {
-	            _this2.props.setSlug(newProgram[0].Slug);
+	            if (programTitleOverride) {
+	              _this2.props.setOverrideTitleText(programTitleOverride);
+	            }
+	            if (imageUriOverride) {
+	              _this2.props.setOverridePosterImageUri(_this2.scaleImg(imageUriOverride), 500);
+	            }
+	            _this2.props.setSlug(newProgram[0].programcard.Slug);
 	          } else {
 	            // if we reach the end of the cliplist, then dont rewind the playlist.
 	            if (newProgramIndex !== _this2.props.activeClipList.length) {
 	              // if a slug wasn't provided or doesn't exist, autoplay the first slug in the cliplist.
-	              _this2.props.setSlug(_this2.props.activeClipList[0].Slug);
+	              _this2.props.setSlug(_this2.props.activeClipList[0].programcard.Slug);
 	            }
 	          }
 	        });
@@ -24683,7 +24785,7 @@
 	      // find the indexof the program currently playing.
 	      var newProgram = this.props.activeClipList.filter(function (item, index) {
 	        // if we find the program, increment the selector to the next program in the line.
-	        if (currentProgram === item.Slug) {
+	        if (currentProgram === item.programcard.Slug || currentProgram === item.programcard.Urn) {
 	          newProgramIndex = index + 1;
 	        }
 	        // finally return the programcard result for the next program to be played.
@@ -24727,7 +24829,7 @@
 	    value: function pagingForVideoArticles() {
 	      var _this3 = this;
 
-	      if (this.props.articleAutoplay && !this.state.isPaging && this.state.mimerPage <= this.state.mimerPageHardLimit) {
+	      if (this.props.articleAutoplay && !this.state.isPaging && this.state.mimerSearches <= this.state.mimerPageHardLimit) {
 	        this.setState({
 	          isPaging: true
 	        });
@@ -24736,10 +24838,11 @@
 	          var newClipList = utilService.mergeClipArraysWithoutDuplicates(_this3.props.activeClipList, data);
 	          // if the next page of results consists entirely of duplicate programcarsd, 
 	          // fetch the next page of results untill hitting the hardlimit.
-	          if (_this3.props.activeClipList.length === newClipList.length && _this3.state.mimerPage <= _this3.state.mimerPageHardLimit) {
+	          if (_this3.props.activeClipList.length === newClipList.length && _this3.state.mimerSearches <= _this3.state.mimerPageHardLimit) {
 	            _this3.setState({
 	              isPaging: false,
-	              mimerPage: _this3.state.mimerPage + 1
+	              mimerPage: _this3.state.mimerPage + 1,
+	              mimerSearches: _this3.state.mimerSearches + 1
 	            });
 	            return _this3.pagingForVideoArticles();
 	          }
@@ -24747,10 +24850,22 @@
 
 	          _this3.setState({
 	            isPaging: false,
-	            mimerPage: _this3.state.mimerPage + 1
+	            mimerPage: _this3.state.mimerPage + 1,
+	            mimerSearches: _this3.state.mimerSearches + 1
 	          });
 	        }).catch(function (err) {
-	          console.log("err", err);
+	          if (err === "AtEndOfResults" && _this3.props.articleAutoplay) {
+	            // update tags and fetch again.
+	            _this3.props.articleBingingTags.shift();
+	            // reset mimer search page, to page 1.
+	            _this3.setState({
+	              isPaging: false,
+	              mimerPage: 1
+	            });
+	            _this3.pagingForVideoArticles();
+	          } else {
+	            console.log("err", err);
+	          }
 	        });
 	      }
 	    }
@@ -24854,7 +24969,12 @@
 	              listTitle: _this5.props.clipListTitle,
 	              onClick: _this5.handleClick,
 	              setSlug: _this5.props.setSlug,
-	              active: _this5.props.slug === item.Slug
+	              setOverrideTitleText: _this5.props.setOverrideTitleText,
+	              setOverridePosterImageUri: _this5.props.setOverridePosterImageUri,
+	              containerWidth: _this5.props.containerWidth,
+	              active: _this5.props.slug === item.programcard.Slug || _this5.props.slug === item.programcard.Urn,
+	              scaleImg: _this5.scaleImg,
+	              articleAutoplay: _this5.props.articleAutoplay
 	            });
 	          })
 	        ),
@@ -24957,28 +25077,35 @@
 	    key: 'render',
 	    value: function render() {
 	      var item = this.props.item;
+	      var mimerOverrideMuFields = item.mimerOverrideMuFields;
+	      // dont show title if articleAutoplay is enabled, and no mimerOverrides are found (usually for the first element in the list)
+	      // use mimerOverrideMuFields instead of programcard data, since programcard data wont be "pretty".
+	      var title = this.props.articleAutoplay ? mimerOverrideMuFields && mimerOverrideMuFields.articleTitle ? mimerOverrideMuFields.articleTitle : "" : item.programcard.Title;
+
+	      var imageUri = mimerOverrideMuFields && mimerOverrideMuFields.imageUri ? this.props.scaleImg(mimerOverrideMuFields.imageUri, 175) : item.programcard.PrimaryImageUri;
+	      var collection = mimerOverrideMuFields && mimerOverrideMuFields.articleTag ? mimerOverrideMuFields.articleTag : this.props.listTitle ? this.props.listTitle : null;
 	      var imgClasses = this.props.active ? "video-spot-img video-spot-img__active" : "video-spot-img";
 	      return _react2.default.createElement(
 	        'div',
-	        { onClick: this.props.onClick.bind(this), className: "video-spot", title: item.Title },
-	        _react2.default.createElement('img', { onDragStart: this.handleImageDragStart, className: imgClasses, src: item.PrimaryImageUri }),
+	        { onClick: this.props.onClick.bind(this), className: "video-spot", title: title },
+	        _react2.default.createElement('img', { onDragStart: this.handleImageDragStart, className: imgClasses, src: imageUri }),
 	        _react2.default.createElement(
 	          'div',
 	          { className: 'video-spot-play-wrapper' },
 	          _react2.default.createElement(
 	            'div',
 	            { className: 'video-spot-list-name' },
-	            this.props.listTitle ? this.props.listTitle : null
+	            collection
 	          ),
 	          _react2.default.createElement(
 	            'div',
 	            { className: 'video-spot-title' },
-	            this.trimTitle(item.Title)
+	            this.trimTitle(title)
 	          ),
 	          _react2.default.createElement(
 	            'div',
 	            { className: 'video-spot-length' },
-	            this.formatTime(parseInt(item.PrimaryAsset.DurationInMilliseconds / 1000))
+	            this.formatTime(parseInt(item.programcard.PrimaryAsset.DurationInMilliseconds / 1000))
 	          )
 	        )
 	      );
@@ -25024,7 +25151,10 @@
 	    _AppContext.AppContext.Consumer,
 	    null,
 	    function (_ref) {
-	      var articleBingingTags = _ref.articleBingingTags,
+	      var setArticleBingingTags = _ref.setArticleBingingTags,
+	          setOverridePosterImageUri = _ref.setOverridePosterImageUri,
+	          setOverrideTitleText = _ref.setOverrideTitleText,
+	          articleBingingTags = _ref.articleBingingTags,
 	          activeClipList = _ref.activeClipList,
 	          setActiveClipList = _ref.setActiveClipList,
 	          clipListSlug = _ref.clipListSlug,
@@ -25035,7 +25165,7 @@
 	          articleAutoplay = _ref.articleAutoplay,
 	          player = _ref.player;
 
-	      var consumerProps = { articleBingingTags: articleBingingTags, activeClipList: activeClipList, setActiveClipList: setActiveClipList, clipListSlug: clipListSlug, setSlug: setSlug, slug: slug, clipListTitle: clipListTitle, clipListTotalSize: clipListTotalSize, articleAutoplay: articleAutoplay, player: player };
+	      var consumerProps = { setArticleBingingTags: setArticleBingingTags, setOverridePosterImageUri: setOverridePosterImageUri, setOverrideTitleText: setOverrideTitleText, articleBingingTags: articleBingingTags, activeClipList: activeClipList, setActiveClipList: setActiveClipList, clipListSlug: clipListSlug, setSlug: setSlug, slug: slug, clipListTitle: clipListTitle, clipListTotalSize: clipListTotalSize, articleAutoplay: articleAutoplay, player: player };
 	      return _react2.default.createElement(_clipList2.default, _extends({}, props, consumerProps));
 	    }
 	  );
@@ -25228,6 +25358,7 @@
 
 	    _initialiseProps.call(_this);
 
+	    _this.containerRef = _react2.default.createRef();
 	    _this.state = {
 	      mimerPage: 1,
 	      subtitleslist: [],
@@ -25372,7 +25503,7 @@
 
 	            // set slug if not provided.
 	            if (!_this4.props.slug) {
-	              _this4.props.setSlug(data.Items[0].Slug);
+	              _this4.props.setSlug(data.Items[0].programcard.Slug);
 	            }
 	          }).catch(function (e) {
 	            trigger('error', {
@@ -25409,7 +25540,12 @@
 	              });
 	            });
 	          }).catch(function (err) {
-	            console.log("err", err);
+	            if (err === "AtEndOfResults" && _this4.props.articleAutoplay) {
+	              _this4.props.articleBingingTags.shift();
+	              _this4.fetchMeta();
+	            } else {
+	              console.log("err", err);
+	            }
 	          });
 	        }
 	        // initVideo will start playback of the first element in the slug, or the first element in the slug array.
@@ -25503,6 +25639,7 @@
 	  }, {
 	    key: 'render',
 	    value: function render() {
+	      var containerWidth = this.containerRef.current ? this.containerRef.current.offsetWidth : null;
 	      var style = this.props.style ? 'video-js vjs-default-skin' : 'video-js ' + (this.props.style || '');
 	      var props = {
 	        slug: this.state.slug,
@@ -25549,9 +25686,9 @@
 	      // Dont show the cliplist untill we have data for it.
 	      return _react2.default.createElement(
 	        'div',
-	        { className: 'player-container' },
+	        { className: 'player-container', ref: this.containerRef },
 	        this.props.isLoading || !this.props.active ? null : _react2.default.createElement(_player2.default, _extends({}, props, this.playerActions)),
-	        this.props.activeClipList && this.props.active ? _react2.default.createElement(_clipList2.default, { slug: props.slug, mimerPage: this.state.mimerPage }) : null
+	        this.props.activeClipList && this.props.active ? _react2.default.createElement(_clipList2.default, { slug: props.slug, mimerPage: this.state.mimerPage, containerWidth: containerWidth }) : null
 	      );
 	    }
 	  }]);
@@ -25570,8 +25707,21 @@
 	  muClassicResource: _propTypes2.default.string,
 	  // toss an error if no slug, channel, clipListSlug or muClassicResource is provided.
 	  slug: function slug(props, propName, componentName) {
-	    if (!props[propName] === !props.channel && !props.clipListSlug && !props.muClassicResource) {
-	      return new Error('Invalid prop `' + propName + ' and/or channel' + '  supplied to' + ' `' + componentName + '`. Validation failed. Expects only a channel or a slug.' + ' channel:' + props.channel + ' slug:' + props[propName]);
+	    var slug = props[propName];
+	    var channel = props.channel;
+	    var clipListSlug = props.clipListSlug;
+	    var muClassicResource = props.muClassicResource;
+	    var activeClipList = props.activeClipList;
+
+	    // slug can be provided with clipListSlug, but only if theres an active cliplist.
+	    var onlySlugIsProvided = slug && !channel && !(clipListSlug && !activeClipList) && !muClassicResource;
+	    var onlyChannelIsProvided = channel && !slug && !clipListSlug && !muClassicResource;
+	    var onlyClipListIsProvided = clipListSlug && !slug && !channel && !muClassicResource;
+	    var onlyMuClassicResourceIsProvided = muClassicResource && !slug && !channel && !clipListSlug;
+	    // only one of these four inputs is allowed.
+	    // unless an activeClipList has been set.
+	    if (onlySlugIsProvided || onlyChannelIsProvided || onlyClipListIsProvided || onlyMuClassicResourceIsProvided) {} else {
+	      return new Error('Invalid prop `' + propName + ', channel, clipListSlug or muClassicResource' + '  supplied to' + ' `' + componentName + '`. Validation failed. Expects only one input of the four.' + ' channel:' + props.channel + ' slug:' + props[propName] + ' clipListSlug:' + props.clipListSlug + ' muClassicResource:' + props.muClassicResource);
 	    }
 	  },
 	  enableHashCodes: _propTypes2.default.bool
@@ -27962,7 +28112,8 @@
 	    _AppContext.AppContext.Consumer,
 	    null,
 	    function (_ref) {
-	      var muClassicResource = _ref.muClassicResource,
+	      var overridePosterImageUri = _ref.overridePosterImageUri,
+	          muClassicResource = _ref.muClassicResource,
 	          autoplay = _ref.autoplay,
 	          articleAutoplay = _ref.articleAutoplay,
 	          clipListSlug = _ref.clipListSlug,
@@ -27986,7 +28137,7 @@
 	          overridePosterTextColor = _ref.overridePosterTextColor,
 	          overrideBigPlayButtonColor = _ref.overrideBigPlayButtonColor;
 
-	      var consumerProps = { muClassicResource: muClassicResource, autoplay: autoplay, articleAutoplay: articleAutoplay, clipListSlug: clipListSlug, startOffset: startOffset, onReady: onReady, onPlay: onPlay, onPause: onPause, onTimeupdate: onTimeupdate, onEnded: onEnded, useLiveRewind: useLiveRewind, active: active, setPlayer: setPlayer, isLoading: isLoading, setLoading: setLoading, setSlug: setSlug, setIsAutoplayingSlug: setIsAutoplayingSlug, useChromecast: useChromecast, useDrtvSender: useDrtvSender, overridePosterText: overridePosterText, overrideTitleText: overrideTitleText, overridePosterTextColor: overridePosterTextColor, overrideBigPlayButtonColor: overrideBigPlayButtonColor };
+	      var consumerProps = { overridePosterImageUri: overridePosterImageUri, muClassicResource: muClassicResource, autoplay: autoplay, articleAutoplay: articleAutoplay, clipListSlug: clipListSlug, startOffset: startOffset, onReady: onReady, onPlay: onPlay, onPause: onPause, onTimeupdate: onTimeupdate, onEnded: onEnded, useLiveRewind: useLiveRewind, active: active, setPlayer: setPlayer, isLoading: isLoading, setLoading: setLoading, setSlug: setSlug, setIsAutoplayingSlug: setIsAutoplayingSlug, useChromecast: useChromecast, useDrtvSender: useDrtvSender, overridePosterText: overridePosterText, overrideTitleText: overrideTitleText, overridePosterTextColor: overridePosterTextColor, overrideBigPlayButtonColor: overrideBigPlayButtonColor };
 	      return _react2.default.createElement(_player2.default, _extends({}, props, consumerProps));
 	    }
 	  );
@@ -28190,7 +28341,7 @@
 	          channel: this.props.channel ? this.props.channel.includes("dr-web") ? '' : this.props.channel : '',
 	          durationInMillisecondsduration: this.props.durationInSeconds ? this.props.durationInSeconds * 1000 : 0
 	        },
-	        poster: this.props.primaryImageUri,
+	        poster: this.props.overridePosterImageUri ? this.props.overridePosterImageUri : this.props.primaryImageUri,
 	        controlBar: controlBar,
 	        chromecast: {
 	          appId: 'F9CC94C7',
@@ -28478,7 +28629,7 @@
 	      // Delay to avoid buffer overlap from previous program.
 	      // causes error in videojs VirtualSourceBuffer Abort attempt.
 	      setTimeout(function () {
-	        _this3.player.poster(_this3.props.primaryImageUri);
+	        _this3.player.poster(_this3.props.overridePosterImageUri ? _this3.props.overridePosterImageUri : _this3.props.primaryImageUri);
 	        _this3.player.src({ 'type': _this3.player.currentType(), src: src });
 	        if (!isFirefox) {
 	          _this3.player.load();
@@ -28683,7 +28834,7 @@
 
 	      if (newTitle && newTitle !== oldTitle) {
 	        this.player.removeChild('program-title');
-	        this.player.addChild('program-title', { title: newTitle });
+	        this.player.addChild('program-title', { title: this.props.overrideTitleText ? this.props.overrideTitleText : newTitle });
 
 	        if (this.props.useLiveRewind && this.props.videoType === "live" && this.props.metadata.programCard && this.props.channel) {
 	          this.player.removeChild('liveRewindButton');
@@ -28891,7 +29042,7 @@
 	        null,
 	        this.state.active && this.state.isVideoStream ? _react2.default.createElement(
 	          'video',
-	          { id: 'core-video-element', poster: this.props.primaryImageUri, width: '768', height: '432', ref: function ref(c) {
+	          { id: 'core-video-element', poster: this.props.overridePosterImageUri ? this.props.overridePosterImageUri : this.props.primaryImageUri, width: '768', height: '432', ref: function ref(c) {
 	              return _this6.videoNode = c;
 	            }, className: videoClass.join(' '), draggable: 'false' },
 	          _react2.default.createElement('source', { src: this.props.selectedStream, type: 'application/x-mpegURL' })
@@ -29285,7 +29436,7 @@
 
 	function getLatestVideoArticles(tags, page) {
 	  return makeRequest({
-	    url: mimerApiPath + "/articles/latest.json?page=" + page + "&page_size=10&tags[]=video," + tags + "&template=full",
+	    url: mimerApiPath + "/articles/latest.json?page=" + page + "&page_size=10&tags[]=Video," + tags + "&template=full",
 	    mimer: true
 	  });
 	}
