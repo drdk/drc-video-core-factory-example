@@ -1,4 +1,4 @@
-var player = require("@dr/drc-video-core").PlayerFactory;
+var playerFactory = require("@dr/drc-video-core").PlayerFactory;
 
 /* OnDemand Video Player */
 var videoElement = document.getElementById('video-player');
@@ -9,6 +9,12 @@ var options = {
     // channel: dr1
 };
 
-var playerInstance = player.getPlayer(options);
+playerFactory.getPlayer(options, function(player) {
+    console.log("use the player object");
+    player.on("play", function(evt){
+        console.log("play was called");
+    });
+    player.play();
+});
 
 

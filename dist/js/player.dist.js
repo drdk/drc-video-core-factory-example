@@ -44,7 +44,7 @@
 /* 0 */
 /***/ (function(module, exports, __webpack_require__) {
 
-	var player = __webpack_require__(1).PlayerFactory;
+	var playerFactory = __webpack_require__(1).PlayerFactory;
 
 	/* OnDemand Video Player */
 	var videoElement = document.getElementById('video-player');
@@ -55,7 +55,13 @@
 	    // channel: dr1
 	};
 
-	var playerInstance = player.getPlayer(options);
+	playerFactory.getPlayer(options, function(player) {
+	    console.log("use the player object");
+	    player.on("play", function(evt){
+	        console.log("play was called");
+	    });
+	    player.play();
+	});
 
 
 
